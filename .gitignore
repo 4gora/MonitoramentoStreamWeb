@@ -1,6 +1,7 @@
 # arquivos do projeto
 /pesquisa_api
 config.yaml
+/doc
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

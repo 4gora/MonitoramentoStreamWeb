@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor de Lives YouTube</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📡 Monitor de Lives YouTube</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <div class="status-dot" id="connectionStatus"></div>
+                    <span>Conexão: <span id="connectionText">Conectando...</span></span>
+                </div>
+                <div class="status-item">
+                    <span>Atualizado: <span id="lastUpdate">--:--</span></span>
+                </div>
+            </div>
+        </header>
+
+        <div class="grid-container" id="streamsGrid">
+            <div class="no-streams">
+                <div class="loading"></div>
+                <p>Carregando streams...</p>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>Atualizações em tempo real via WebSocket | Grid responsivo para múltiplas telas</p>
+        </footer>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        class StreamGridManager {
+            constructor() {
+                this.streams = {};
+                this.socket = null;
+                this.initSocket();
+                setInterval(() => this.updateTimes(), 1000);
+            }
+
+            initSocket() {
+                this.socket = io();
+                
+                this.socket.on('connect', () => {
+                    this.setConnectionStatus(true);
+                    console.log('Socket.IO conectado');
+                });
+                
+                this.socket.on('streams_update', (data) => {
+                    this.streams = data;
+                    this.render();
+                    this.updateLastUpdate();
+                });
+                
+                this.socket.on('disconnect', () => {
+                    this.setConnectionStatus(false);
+                    console.log('Socket.IO desconectado');
+                });
+            }
+
+            setConnectionStatus(connected) {
+                const dot = document.getElementById('connectionStatus');
+                const text = document.getElementById('connectionText');
+                
+                if (connected) {
+                    dot.classList.add('connected');
+                    dot.classList.remove('disconnected');
+                    text.textContent = 'Conectado';
+                } else {
+                    dot.classList.remove('connected');
+                    dot.classList.add('disconnected');
+                    text.textContent = 'Desconectado';
+                }
+            }
+
+            updateLastUpdate() {
+                const now = new Date();
+                const time = now.toLocaleTimeString('pt-BR', { 
+                    hour: '2-digit', 
+                    minute: '2-digit'
+                });
+                document.getElementById('lastUpdate').textContent = time;
+            }
+
+            updateTimes() {
+                Object.values(this.streams).forEach(stream => {
+                    const card = document.getElementById(`stream-${stream.channel_id}`);
+                    if (!card) return;
+                    
+                    const statusEl = card.querySelector('.time-value');
+                    if (statusEl) {
+                        statusEl.textContent = this.formatStreamTime(stream);
+                    }
+                });
+            }
+
+            formatStreamTime(stream) {
+                if (!stream.selected_stream) return 'Sem streams';
+                
+                const selected = stream.selected_stream;
+                const now = new Date();
+                
+                if (selected.actualStartTime) {
+                    return '🔴 AO VIVO';
+                }
+                
+                if (selected.scheduledStartTime) {
+                    const scheduled = new Date(selected.scheduledStartTime.replace('Z', '+00:00'));
+                    const diff = scheduled - now;
+                    
+                    if (diff > 0) {
+                        const hours = Math.floor(diff / 3600000);
+                        const mins = Math.floor((diff % 3600000) / 60000);
+                        return `Em ${hours}h ${mins}m`;
+                    }
+                }
+                
+                return 'Offline';
+            }
+
+            render() {
+                const grid = document.getElementById('streamsGrid');
+                
+                if (Object.keys(this.streams).length === 0) {
+                    grid.innerHTML = '<div class="no-streams"><p>Nenhuma stream disponível</p></div>';
+                    return;
+                }
+                
+                grid.innerHTML = Object.entries(this.streams).map(([channelId, stream]) => {
+                    const selected = stream.selected_stream;
+                    const isLive = selected && selected.actualStartTime;
+                    const isScheduled = selected && selected.scheduledStartTime && !selected.actualStartTime;
+                    const status = isLive ? 'live' : (isScheduled ? 'scheduled' : 'offline');
+                    
+                    return `
+                        <div class="stream-card ${status}" id="stream-${channelId}">
+                            <div class="video-player">
+                                ${selected ? `
+                                    <iframe 
+                                        src="https://www.youtube.com/embed/${selected.videoId}?autoplay=0&controls=1"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowfullscreen>
+                                    </iframe>
+                                ` : `
+                                    <div class="video-placeholder">
+                                        Nenhuma stream disponível
+                                    </div>
+                                `}
+                            </div>
+                            <div class="card-info">
+                                <div class="card-title">${selected?.title || stream.nome}</div>
+                                <div class="card-meta">
+                                    <span class="channel-name">${stream.nome}</span>
+                                    <span class="badge ${status}">
+                                        ${status === 'live' ? '🔴 Ao Vivo' : (status === 'scheduled' ? '⏰ Agendada' : '⚫ Offline')}
+                                    </span>
+                                </div>
+                                <div class="time-info">
+                                    <span class="time-label">Status:</span>
+                                    <span class="time-value">${this.formatStreamTime(stream)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new StreamGridManager();
+        });
+    </script>
+</body>
+</html>
