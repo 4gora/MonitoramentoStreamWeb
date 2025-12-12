@@ -10,7 +10,7 @@ import threading
 import time
 import logging
 from youtube_web_manager import YouTubeWebManager
-from log_config import log_terminal
+from log_config import log_terminal, setup_logger
 
 # Configuração Flask
 app = Flask(__name__, static_folder="static", template_folder="templates")
@@ -18,6 +18,10 @@ app.config['SECRET_KEY'] = 'youtube-monitor-web-secret-2025'
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading', ping_timeout=120, ping_interval=25)
 
 # Logging
+
+logger = setup_logger()
+log_terminal("Logger principal inicializado (logs/main.log)", cor='green')
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
